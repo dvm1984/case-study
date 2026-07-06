@@ -189,11 +189,56 @@
   .explain b { color: #fff; }
   #modeExplain { transition: opacity .2s; }
 
-  .footer-note { text-align: center; margin-top: 26px; font-size: 12px; color: var(--muted); }
+  .seg-mobile { display: none; } /* shown only on mobile via media query below */
 
   @media (max-width: 880px) {
     .grid { grid-template-columns: 1fr; }
-    .controls { gap: 16px; }
+    .controls { gap: 14px; }
+  }
+
+  /* Mobile: anything under 600px (phones) */
+  @media (max-width: 600px) {
+    body { padding: 16px 12px 48px; }
+    .wrap { max-width: 100%; }
+    .masthead h1 { font-size: 19px; }
+    .masthead p { font-size: 13px; }
+
+    /* Controls: full-width stack */
+    .controls { flex-direction: column; padding: 14px 14px; gap: 14px; border-radius: 12px; }
+    .ctrl-group { width: 100%; }
+
+    /* Seg buttons → hidden on mobile, replaced by a <select> shown instead */
+    .seg { display: none; }
+    .seg-mobile {
+      display: block; width: 100%;
+      font: inherit; font-size: 14px; font-weight: 600; color: var(--ink);
+      background: var(--offwhite); border: 1px solid var(--line);
+      border-radius: 10px; padding: 11px 12px; cursor: pointer;
+      appearance: auto;
+    }
+    .country-sel { width: 100%; }
+
+    /* Discount row: stack input + buttons */
+    .disc-row { flex-wrap: wrap; }
+    .disc-input { flex: 1; min-width: 0; width: auto; }
+    .btn { padding: 10px 14px; font-size: 13px; }
+
+    /* Cart items: smaller thumb, tighter spacing */
+    .item { padding: 12px 14px; gap: 10px; }
+    .thumb { width: 48px; height: 48px; font-size: 22px; }
+    .item-name { font-size: 14px; }
+    .tax-detail.open { max-height: 160px; }
+
+    /* Summary panel: sticky at bottom on mobile */
+    #summary-panel {
+      position: sticky; bottom: 0; z-index: 10;
+      border-radius: 14px 14px 0 0;
+      box-shadow: 0 -4px 20px rgba(30,40,60,0.12);
+    }
+
+    /* Explainer strip: smaller */
+    .explain { padding: 14px 16px; font-size: 13px; }
+    .explain .dot { width: 28px; height: 28px; font-size: 15px; }
   }
 </style>
 </head>
@@ -209,17 +254,24 @@
   <div class="controls">
     <div class="ctrl-group">
       <span class="ctrl-label">Pricing mode</span>
+      <!-- Desktop: segmented button group -->
       <div class="seg" id="modeSeg" role="group" aria-label="Pricing mode">
         <button data-mode="itemized">Itemized (today)</button>
         <button data-mode="blended" class="active">Blended all-in</button>
         <button data-mode="absorbed">Merchant-absorbed</button>
       </div>
+      <!-- Mobile: native select (shown via CSS on small screens) -->
+      <select class="seg-mobile" id="modeSel" aria-label="Pricing mode">
+        <option value="itemized">Itemized (today)</option>
+        <option value="blended" selected>Blended all-in</option>
+        <option value="absorbed">Merchant-absorbed</option>
+      </select>
     </div>
     <div class="ctrl-group">
       <span class="ctrl-label">Ship to</span>
       <select class="country-sel" id="country" aria-label="Destination country">
         <option value="UK" data-tax="0.20" data-cur="£" data-name="UK VAT">United Kingdom (VAT 20%)</option>
-        <option value="EU" data-tax="0.21" data-cur="€" data-name="Netherlands VAT (EU)">Netherlands · EU (VAT 21%)</option>
+        <option value="EU" data-tax="0.21" data-cur="€" data-name="Netherlands VAT">Netherlands · EU (VAT 21%)</option>
         <option value="AU" data-tax="0.10" data-cur="A$" data-name="GST">Australia (GST 10%)</option>
       </select>
     </div>
@@ -244,7 +296,7 @@
       <div id="cart"></div>
     </div>
 
-    <div class="panel">
+    <div class="panel" id="summary-panel">
       <div class="panel-head"><span>Order summary</span></div>
       <div class="sum-body" id="summary"></div>
       <div class="sum-sub" id="sumSub"></div>
@@ -444,6 +496,16 @@ document.getElementById("modeSeg").addEventListener("click", e => {
   document.querySelectorAll("#modeSeg button").forEach(b => b.classList.remove("active"));
   btn.classList.add("active");
   state.mode = btn.dataset.mode;
+  document.getElementById("modeSel").value = state.mode;
+  renderAll(false);
+});
+
+// Mobile: native select for pricing mode
+document.getElementById("modeSel").addEventListener("change", e => {
+  state.mode = e.target.value;
+  document.querySelectorAll("#modeSeg button").forEach(b => b.classList.remove("active"));
+  const activeBtn = document.querySelector(`#modeSeg button[data-mode="${state.mode}"]`);
+  if (activeBtn) activeBtn.classList.add("active");
   renderAll(false);
 });
 
