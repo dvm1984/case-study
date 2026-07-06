@@ -91,6 +91,23 @@
   .disc-hint { font-size: 12px; color: var(--muted); }
   .disc-hint b { color: var(--good); }
 
+  /* Raw-values toggle switch */
+  .raw-toggle { display: inline-flex; align-items: center; gap: 9px; cursor: pointer; user-select: none; }
+  .raw-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .raw-track {
+    width: 40px; height: 23px; border-radius: 20px; background: #C7D2D8;
+    position: relative; transition: background .18s ease; flex-shrink: 0;
+  }
+  .raw-thumb {
+    position: absolute; top: 2.5px; left: 2.5px; width: 18px; height: 18px;
+    border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25);
+    transition: transform .18s ease;
+  }
+  .raw-toggle input:checked + .raw-track { background: var(--deep); }
+  .raw-toggle input:checked + .raw-track .raw-thumb { transform: translateX(17px); }
+  .raw-toggle input:focus-visible + .raw-track { outline: 2px solid var(--amber); outline-offset: 2px; }
+  .raw-label { font-size: 13px; font-weight: 600; color: var(--ink); }
+
   /* Layout */
   .grid { display: grid; grid-template-columns: 1fr 380px; gap: 20px; align-items: start; }
   .panel {
@@ -142,7 +159,7 @@
     max-height: 0; overflow: hidden; transition: max-height .25s ease, margin .25s ease;
     margin-top: 0;
   }
-  .tax-detail.open { max-height: 120px; margin-top: 8px; }
+  .tax-detail.open { max-height: 220px; margin-top: 8px; }
   .tax-box {
     background: var(--offwhite); border-radius: 8px; padding: 10px 12px;
     font-size: 12.5px; color: var(--muted);
@@ -245,7 +262,7 @@
 <body>
 <div class="wrap">
   <div class="masthead">
-    <div class="eyebrow">OpenBorder · Interactive Prototype</div>
+    <div class="eyebrow">Interactive Prototype</div>
     <h1>Duty-Inclusive Pricing — live checkout demo</h1>
     <p>Switch the pricing mode and apply a discount to see how the shopper's price, and the per-item tax disclosure, behave. This is the behavior specified in the PRD, made clickable.</p>
   </div>
@@ -270,8 +287,8 @@
     <div class="ctrl-group">
       <span class="ctrl-label">Ship to</span>
       <select class="country-sel" id="country" aria-label="Destination country">
-        <option value="UK" data-tax="0.20" data-cur="£" data-name="UK VAT">United Kingdom (VAT 20%)</option>
-        <option value="EU" data-tax="0.21" data-cur="€" data-name="Netherlands VAT">Netherlands · EU (VAT 21%)</option>
+        <option value="UK" data-tax="0.20" data-cur="£" data-name="VAT UK">United Kingdom (VAT 20%)</option>
+        <option value="EU" data-tax="0.21" data-cur="€" data-name="VAT Netherlands (EU)">Netherlands · EU (VAT 21%)</option>
         <option value="AU" data-tax="0.10" data-cur="A$" data-name="GST">Australia (GST 10%)</option>
       </select>
     </div>
@@ -283,6 +300,15 @@
         <button class="btn ghost" id="clearBtn">Clear</button>
       </div>
       <span class="disc-hint" id="discHint">Try <b>SAVE15</b> or <b>WINTER25</b></span>
+    </div>
+    <div class="ctrl-group">
+      <span class="ctrl-label">Display</span>
+      <label class="raw-toggle">
+        <input type="checkbox" id="rawToggle" aria-label="Show raw calculated values">
+        <span class="raw-track"><span class="raw-thumb"></span></span>
+        <span class="raw-label">Raw values</span>
+      </label>
+      <span class="disc-hint">Off = rounded to .99 (merchant-favorable)</span>
     </div>
   </div>
 
@@ -342,9 +368,21 @@ let state = {
   discount: 0,
   discountCode: "",
   open: {},
+  showRaw: false,   // false = rounded to .99 (merchant-favorable, default); true = raw calculated values
 };
 
 const fmt = (cur, n) => cur + n.toFixed(2);
+
+// Round a blended all-in price UP to the nearest .99, favoring the merchant.
+// The exact duty is still remitted to customs; the rounding delta is a small
+// margin cushion for the merchant that offsets duty-estimation variance.
+function roundNiceNinetyNine(value) {
+  // e.g. 316.80 -> 316.99 ; 269.28 -> 269.99 ; 158.40 -> 158.99 ; 93.00 -> 93.99
+  const whole = Math.floor(value);
+  const withNinetyNine = whole + 0.99;
+  // If the raw value already exceeds x.99 (e.g. 316.995), bump to next .99
+  return value <= withNinetyNine ? withNinetyNine : whole + 1 + 0.99;
+}
 
 function currentCountry() {
   const opt = document.getElementById("country").selectedOptions[0];
@@ -365,13 +403,19 @@ function calcItem(p) {
   if (state.mode === "absorbed") passthrough = 0;
   const tax = net * c.tax;
   const duty = net * dutyRate * passthrough;
-  let displayed;
+  let displayedRaw;
   if (state.mode === "itemized") {
-    displayed = net;
+    displayedRaw = net;
   } else {
-    displayed = net + duty + tax;
+    displayedRaw = net + duty + tax;
   }
-  return { net, tax, duty, dutyRate, displayed, passthrough, c };
+  // Blended/absorbed prices round to .99 in the merchant's favor unless raw mode is on.
+  // Itemized keeps the true net price (it's not an all-in blended number).
+  const rounded = (state.mode !== "itemized" && !state.showRaw)
+    ? roundNiceNinetyNine(displayedRaw)
+    : displayedRaw;
+  const roundingDelta = rounded - displayedRaw;  // merchant's margin cushion
+  return { net, tax, duty, dutyRate, displayed: rounded, displayedRaw, roundingDelta, passthrough, c };
 }
 
 function renderCart() {
@@ -403,7 +447,8 @@ function renderCart() {
               <div class="row"><span>Item price (net)</span><b>${fmt(r.c.cur, r.net)}</b></div>
               <div class="row"><span>${r.c.name} tax (${(r.c.tax*100).toFixed(0)}%)</span><b>${fmt(r.c.cur, r.tax)}</b></div>
               ${state.mode !== "itemized" ? `<div class="row"><span>Duty ${r.passthrough===0 ? "(absorbed)" : ""} · ${(r.dutyRate*100).toFixed(0)}% · HS ${p.hs}</span><b>${r.dutyRate === 0 ? "Free" : fmt(r.c.cur, r.duty)}</b></div>` : `<div class="row" style="color:#8A5A00"><span>Duty &amp; tax added at checkout</span><b></b></div>`}
-              <div class="tax-note">Tax on discounted price${showWas ? " — recalculated on promo" : ""}. Duty rate: MFN, no FTA preferences.</div>
+              ${(state.mode !== "itemized" && !state.showRaw && r.roundingDelta > 0.001) ? `<div class="row" style="border-top:1px solid #D5E0E4;margin-top:4px;padding-top:5px"><span>Rounded to .99 (merchant margin)</span><b style="color:var(--good)">+${fmt(r.c.cur, r.roundingDelta)}</b></div><div class="row"><span>Raw all-in</span><b style="color:var(--muted)">${fmt(r.c.cur, r.displayedRaw)}</b></div>` : ""}
+              <div class="tax-note">Tax on discounted price${showWas ? " — recalculated on promo" : ""}.${(state.mode !== "itemized" && !state.showRaw) ? " Displayed price rounded up to .99; exact duty still remitted." : " Raw values shown — no rounding applied."}</div>
             </div>
           </div>
         </div>
@@ -532,6 +577,11 @@ document.getElementById("clearBtn").addEventListener("click", () => {
   document.getElementById("discCode").value = "";
   document.getElementById("discHint").innerHTML = `Try <b>SAVE15</b> or <b>WINTER25</b>`;
   renderAll(true);
+});
+
+document.getElementById("rawToggle").addEventListener("change", e => {
+  state.showRaw = e.target.checked;
+  renderAll(true);  // flash so the price shift between rounded/raw is visible
 });
 
 renderAll(false);
