@@ -1,9 +1,11 @@
+CHANGELOG.md
+node/__mocks__/fixtures/**
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OpenBorder — Duty-Inclusive Pricing Prototype</title>
+<title>Duty-Inclusive Pricing Prototype</title>
 <style>
   :root {
     --mid: #21295C;
@@ -219,8 +221,8 @@
       <span class="ctrl-label">Ship to</span>
       <select class="country-sel" id="country" aria-label="Destination country">
         <option value="UK" data-duty="0.12" data-tax="0.20" data-cur="£" data-name="United Kingdom">United Kingdom (VAT 20%)</option>
-        <option value="EU" data-duty="0.10" data-tax="0.21" data-cur="€" data-name="EU (Netherlands)">EU · Netherlands (VAT 21%)</option>
-        <option value="AU" data-duty="0.10" data-tax="0.10" data-cur="A$" data-name="Australia">Australia (GST 10%)</option>
+        <option value="EU" data-duty="0.10" data-tax="0.21" data-cur="€" data-name="VAT Netherlands">EU · Netherlands (VAT 21%)</option>
+        <option value="AU" data-duty="0.10" data-tax="0.10" data-cur="A$" data-name="GST">Australia (GST 10%)</option>
       </select>
     </div>
     <div class="ctrl-group">
@@ -258,7 +260,7 @@
     <div id="modeExplain"></div>
   </div>
 
-  <div class="footer-note">Prototype for discussion · figures illustrative · duty/tax rates are demo values, not live customs data</div>
+  <div class="footer-note">Prototype for discussion · figures illustrative · duty/tax rates are demo values, not live data</div>
 </div>
 
 <script>
