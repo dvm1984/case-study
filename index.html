@@ -1,5 +1,3 @@
-CHANGELOG.md
-node/__mocks__/fixtures/**
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -202,7 +200,7 @@ node/__mocks__/fixtures/**
 <body>
 <div class="wrap">
   <div class="masthead">
-    <div class="eyebrow">Interactive Prototype</div>
+    <div class="eyebrow">OpenBorder · Interactive Prototype</div>
     <h1>Duty-Inclusive Pricing — live checkout demo</h1>
     <p>Switch the pricing mode and apply a discount to see how the shopper's price, and the per-item tax disclosure, behave. This is the behavior specified in the PRD, made clickable.</p>
   </div>
@@ -220,9 +218,9 @@ node/__mocks__/fixtures/**
     <div class="ctrl-group">
       <span class="ctrl-label">Ship to</span>
       <select class="country-sel" id="country" aria-label="Destination country">
-        <option value="UK" data-duty="0.12" data-tax="0.20" data-cur="£" data-name="United Kingdom">United Kingdom (VAT 20%)</option>
-        <option value="EU" data-duty="0.10" data-tax="0.21" data-cur="€" data-name="VAT Netherlands">EU · Netherlands (VAT 21%)</option>
-        <option value="AU" data-duty="0.10" data-tax="0.10" data-cur="A$" data-name="GST">Australia (GST 10%)</option>
+        <option value="UK" data-tax="0.20" data-cur="£" data-name="UK VAT">United Kingdom (VAT 20%)</option>
+        <option value="EU" data-tax="0.21" data-cur="€" data-name="Netherlands VAT (EU)">Netherlands · EU (VAT 21%)</option>
+        <option value="AU" data-tax="0.10" data-cur="A$" data-name="GST">Australia (GST 10%)</option>
       </select>
     </div>
     <div class="ctrl-group">
@@ -260,24 +258,38 @@ node/__mocks__/fixtures/**
     <div id="modeExplain"></div>
   </div>
 
-  <div class="footer-note">Prototype for discussion · figures illustrative · duty/tax rates are demo values, not live data</div>
+  <div class="footer-note">Prototype for discussion · duty rates sourced from EU TARIC 2026 &amp; Australian Border Force tariff schedule · rates are MFN (no FTA preferences applied)</div>
 </div>
 
 <script>
-// ---- Product data (base prices in the merchant's domestic currency, treated 1:1 for the demo) ----
+// ---- Product data with per-product, per-market duty rates ----
+// Duty rates sourced from: EU TARIC 2026 (MFN third-country); AU ABF Tariff Schedule 2026; UK Global Tariff 2026
+// HS codes: Wool overcoat 6201.20, Cashmere scarf 6214.20 (wool/fine animal hair), Chelsea boots 6403.51
 const products = [
-  { id: "coat",  name: "Merino Wool Overcoat", variant: "Navy · M",       base: 240.00, emoji: "🧥", bg: "#E4EEF3" },
-  { id: "scarf", name: "Cashmere Scarf",        variant: "Charcoal",       base: 85.00,  emoji: "🧣", bg: "#F0E9F2" },
-  { id: "boot",  name: "Chelsea Boots",         variant: "Tan · UK 9",     base: 175.00, emoji: "🥾", bg: "#F2ECE4" },
+  {
+    id: "coat", name: "Merino Wool Overcoat", variant: "Navy · M", base: 240.00, emoji: "🧥", bg: "#E4EEF3",
+    hs: "6201.20", hsDesc: "Wool/fine animal hair overcoat",
+    duty: { UK: 0.12, EU: 0.12, AU: 0.05 },  // UK 12% UKGT, EU 12% TARIC, AU 5% ABF
+  },
+  {
+    id: "scarf", name: "Cashmere Scarf", variant: "Charcoal", base: 85.00, emoji: "🧣", bg: "#F0E9F2",
+    hs: "6214.20", hsDesc: "Wool/fine animal hair scarf/shawl",
+    duty: { UK: 0.12, EU: 0.12, AU: 0.00 },  // UK 12% UKGT, EU 12% TARIC, AU Free (ABF 6214.20.00)
+  },
+  {
+    id: "boot", name: "Chelsea Boots", variant: "Tan · UK 9", base: 175.00, emoji: "🥾", bg: "#F2ECE4",
+    hs: "6403.51", hsDesc: "Leather upper boots covering the ankle",
+    duty: { UK: 0.08, EU: 0.08, AU: 0.05 },  // UK 8% UKGT, EU 8% TARIC (6403.51.15), AU 5% ABF
+  },
 ];
 
 const discounts = { "SAVE15": 0.15, "WINTER25": 0.25 };
 
 let state = {
   mode: "blended",
-  discount: 0,       // fraction, e.g. 0.15
+  discount: 0,
   discountCode: "",
-  open: {},          // per-item tax disclosure open/closed
+  open: {},
 };
 
 const fmt = (cur, n) => cur + n.toFixed(2);
@@ -285,33 +297,29 @@ const fmt = (cur, n) => cur + n.toFixed(2);
 function currentCountry() {
   const opt = document.getElementById("country").selectedOptions[0];
   return {
-    duty: parseFloat(opt.dataset.duty),
     tax: parseFloat(opt.dataset.tax),
     cur: opt.dataset.cur,
     name: opt.dataset.name,
+    code: opt.value,
   };
 }
 
 // Core calc: given a product, return the numbers for the current mode
 function calcItem(p) {
   const c = currentCountry();
-  const net = p.base * (1 - state.discount);        // discounted base — the taxable basis
-  // pass-through: blended = full duty passed through; absorbed = 0; itemized = duty shown separately at checkout
+  const dutyRate = p.duty[c.code];  // per-product, per-market duty rate
+  const net = p.base * (1 - state.discount);
   let passthrough = 1;
   if (state.mode === "absorbed") passthrough = 0;
-  // tax is always computed on the discounted NET price
   const tax = net * c.tax;
-  const duty = net * c.duty * passthrough;
-  // What the shopper sees on the line:
+  const duty = net * dutyRate * passthrough;
   let displayed;
   if (state.mode === "itemized") {
-    // itemized shows the plain net price on the line; duty+tax get added at checkout
     displayed = net;
   } else {
-    // blended / absorbed: all-in price shown on the line
     displayed = net + duty + tax;
   }
-  return { net, tax, duty, displayed, passthrough, c };
+  return { net, tax, duty, dutyRate, displayed, passthrough, c };
 }
 
 function renderCart() {
@@ -323,7 +331,7 @@ function renderCart() {
     const showWas = state.discount > 0;
     const wasPrice = state.mode === "itemized"
       ? p.base
-      : p.base + (p.base * r.c.duty * r.passthrough) + (p.base * r.c.tax);
+      : p.base + (p.base * r.dutyRate * r.passthrough) + (p.base * r.c.tax);
 
     const item = document.createElement("div");
     item.className = "item";
@@ -341,9 +349,9 @@ function renderCart() {
           <div class="tax-detail ${isOpen ? "open":""}" id="detail-${p.id}">
             <div class="tax-box">
               <div class="row"><span>Item price (net)</span><b>${fmt(r.c.cur, r.net)}</b></div>
-              <div class="row"><span>${r.c.name} tax</span><b>${fmt(r.c.cur, r.tax)}</b></div>
-              ${state.mode !== "itemized" ? `<div class="row"><span>Duty ${r.passthrough===0 ? "(absorbed by merchant)" : "(included)"}</span><b>${fmt(r.c.cur, r.duty)}</b></div>` : ""}
-              <div class="tax-note">Tax calculated on the discounted price${showWas ? " — recalculated when the promo was applied" : ""}.</div>
+              <div class="row"><span>${r.c.name} tax (${(r.c.tax*100).toFixed(0)}%)</span><b>${fmt(r.c.cur, r.tax)}</b></div>
+              ${state.mode !== "itemized" ? `<div class="row"><span>Duty ${r.passthrough===0 ? "(absorbed)" : ""} · ${(r.dutyRate*100).toFixed(0)}% · HS ${p.hs}</span><b>${r.dutyRate === 0 ? "Free" : fmt(r.c.cur, r.duty)}</b></div>` : `<div class="row" style="color:#8A5A00"><span>Duty &amp; tax added at checkout</span><b></b></div>`}
+              <div class="tax-note">Tax on discounted price${showWas ? " — recalculated on promo" : ""}. Duty rate: MFN, no FTA preferences.</div>
             </div>
           </div>
         </div>
